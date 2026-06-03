@@ -25,7 +25,7 @@ The backend handles authentication, JWT security, task storage, and AI suggestio
 - Search tasks by title or description
 - Filter tasks by status
 - Dashboard statistics
-- AI task suggestion generator using Grok or Ollama
+- AI task suggestion and topic-guide assistant using Grok or Ollama
 - Toast notifications for user actions
 - Responsive modern UI using Tailwind CSS
 
@@ -55,7 +55,8 @@ The backend handles authentication, JWT security, task storage, and AI suggestio
 | Spring Data JPA | Handles database operations through repositories |
 | Spring Security | Protects backend routes |
 | JWT / JJWT | Generates and validates JSON Web Tokens |
-| H2 Database | In-memory development database |
+| MySQL | Default persistent database |
+| H2 Database | Optional in-memory database for tests or quick local runs |
 | Maven | Backend dependency management and build tool |
 | RestTemplate | Calls the configured AI provider |
 | Jackson | Parses JSON responses from AI providers |
@@ -96,6 +97,8 @@ D:\task_manager
 |       |   |           +-- service
 |       |   +-- resources
 |       |       +-- application.properties
+|       |       +-- application-h2.properties
+|       |       +-- application-mysql.properties
 |       +-- test
 |           +-- java
 |               +-- com
@@ -145,14 +148,12 @@ Current important settings:
 
 ```properties
 spring.application.name=taskmanager
-spring.datasource.url=jdbc:h2:mem:taskdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-spring.datasource.driver-class-name=org.h2.Driver
-spring.datasource.username=sa
-spring.datasource.password=
+# MySQL is the default runtime database. Use SPRING_PROFILES_ACTIVE=h2 for an
+# in-memory database when you do not want to start MySQL.
+spring.profiles.default=mysql
 spring.jpa.hibernate.ddl-auto=update
 spring.jpa.open-in-view=false
 spring.jpa.show-sql=false
-spring.h2.console.enabled=true
 server.port=8081
 ai.provider=${AI_PROVIDER:grok}
 grok.api.key=${GROK_API_KEY:${XAI_API_KEY:}}
@@ -162,7 +163,28 @@ ollama.api.base-url=${OLLAMA_BASE_URL:http://localhost:11434}
 ollama.api.model=${OLLAMA_MODEL:phi3:latest}
 ```
 
-Important note: the current application uses H2 in-memory database, not MySQL. Because it is in-memory, task and user data may be lost when the backend restarts.
+The default backend profile is `mysql`, so normal backend startup uses persistent MySQL storage.
+
+MySQL profile configuration:
+
+```properties
+spring.datasource.url=${MYSQL_URL:jdbc:mysql://localhost:3306/taskdb?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+spring.datasource.username=${MYSQL_USER:root}
+spring.datasource.password=${MYSQL_PASSWORD:}
+spring.jpa.hibernate.ddl-auto=update
+spring.h2.console.enabled=false
+```
+
+H2 profile configuration:
+
+```properties
+spring.datasource.url=jdbc:h2:mem:taskdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+spring.datasource.driver-class-name=org.h2.Driver
+spring.datasource.username=sa
+spring.datasource.password=
+spring.h2.console.enabled=true
+```
 
 ## 6. Backend Packages
 
@@ -242,7 +264,7 @@ Contains business logic.
 
 | Method | Endpoint | Description | Auth Required |
 | --- | --- | --- | --- |
-| `POST` | `/ai/generate` | Generates task suggestions from a goal | Yes |
+| `POST` | `/ai/generate` | Generates task suggestions or topic guides | Yes |
 
 ### Test Endpoint
 
@@ -336,17 +358,28 @@ npm install
 
 ### Step 2: Start Backend
 
-Open a terminal:
+Open a terminal. MySQL is the default backend database, so make sure MySQL is running first:
 
 ```powershell
-cd D:\task_manager\taskmanager
-.\mvnw.cmd spring-boot:run
+cd D:\task_manager
+$env:MYSQL_USER="root"
+$env:MYSQL_PASSWORD="your_mysql_password"
+npm run backend
 ```
 
 Backend will start at:
 
 ```text
 http://localhost:8081
+```
+
+Optional: set `MYSQL_URL` if your database is not `jdbc:mysql://localhost:3306/taskdb`.
+
+To run without MySQL, use the H2 profile:
+
+```powershell
+cd D:\task_manager
+npm run backend:h2
 ```
 
 ### Step 3: Start Frontend
@@ -434,7 +467,7 @@ cd D:\task_manager\taskmanager
 7. Add tasks using the quick add form.
 8. Use search and filters to find tasks.
 9. Mark tasks complete, edit tasks, or delete tasks.
-10. Use the AI assistant by typing a goal, asking the configured provider for suggestions, and adding useful suggestions as tasks.
+10. Use the AI assistant to generate task suggestions or switch to topic guide mode for learning help.
 
 ## 14. Testing
 
@@ -499,22 +532,34 @@ taskmanager/target
 Current database:
 
 ```text
-H2 in-memory database
+MySQL by default
 ```
 
 Database URL:
 
 ```text
+jdbc:mysql://localhost:3306/taskdb
+```
+
+The database can be customized with `MYSQL_URL`, `MYSQL_USER`, and `MYSQL_PASSWORD`.
+
+For a temporary in-memory database, run:
+
+```powershell
+npm run backend:h2
+```
+
+The H2 profile uses:
+
+```text
 jdbc:h2:mem:taskdb
 ```
 
-H2 console is enabled:
+H2 console is enabled in the H2 profile:
 
 ```properties
 spring.h2.console.enabled=true
 ```
-
-Because the database is in-memory, it is best for development and testing. For production or long-term storage, switch to a persistent database such as MySQL or PostgreSQL.
 
 ## 17. Security Notes
 
@@ -533,16 +578,16 @@ Important improvements needed before production:
 - Move the JWT secret out of source code and into environment variables.
 - Add user-based task ownership so each user only sees their own tasks.
 - Add input validation for usernames, passwords, and tasks.
-- Use a persistent database.
+- Keep MySQL running for persistent local data.
 
 ## 18. Current Limitations
 
 - Tasks are not linked to a specific user.
 - Any authenticated user can access the shared task list.
 - Passwords are not encrypted.
-- H2 database data is temporary.
+- H2 database data is temporary when the H2 profile is used.
 - AI suggestions depend on either a configured Grok API key or a running local Ollama model.
-- `walkthrough.md` mentions MySQL, but the current project uses H2.
+- Default startup uses MySQL unless the H2 profile is selected.
 
 ## 19. Suggested Future Enhancements
 
@@ -555,7 +600,7 @@ Important improvements needed before production:
 - Add stronger backend validation.
 - Add controller tests for authentication and tasks.
 - Add deployment configuration.
-- Add persistent database profile for MySQL or PostgreSQL.
+- Add deployment-ready database migration scripts.
 - Add refresh token flow for longer sessions.
 
 ## 20. Final Summary

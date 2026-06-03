@@ -15,6 +15,9 @@ import com.taskmanager.model.AiGenerateResponse;
 @Service
 public class AiSuggestionService {
 
+    private static final String SOLUTION_MODE = "solution";
+    private static final String SUGGESTIONS_MODE = "suggestions";
+
     private final Map<String, AiSuggestionProvider> providers;
     private final String configuredProvider;
 
@@ -29,7 +32,7 @@ public class AiSuggestionService {
         this.configuredProvider = normalizeProvider(configuredProvider);
     }
 
-    public AiGenerateResponse generateSuggestions(String goal) {
+    public AiGenerateResponse generate(String goal, String mode) {
         AiSuggestionProvider provider = providers.get(configuredProvider);
 
         if (provider == null) {
@@ -37,6 +40,10 @@ public class AiSuggestionService {
                     "AI provider '%s' is not supported. Use one of: %s"
                             .formatted(configuredProvider, String.join(", ", providers.keySet()))
             );
+        }
+
+        if (SOLUTION_MODE.equals(normalizeMode(mode))) {
+            return provider.solveProblem(goal);
         }
 
         return provider.generateSuggestions(goal);
@@ -52,5 +59,24 @@ public class AiSuggestionService {
         }
 
         return provider.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeMode(String mode) {
+        if (!StringUtils.hasText(mode)) {
+            return SUGGESTIONS_MODE;
+        }
+
+        String normalizedMode = mode.trim().toLowerCase(Locale.ROOT);
+
+        if ("solve".equals(normalizedMode)
+                || "problem".equals(normalizedMode)
+                || "topic".equals(normalizedMode)
+                || "guide".equals(normalizedMode)
+                || "learn".equals(normalizedMode)
+                || "question".equals(normalizedMode)) {
+            return SOLUTION_MODE;
+        }
+
+        return normalizedMode;
     }
 }

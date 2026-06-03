@@ -33,7 +33,7 @@ public class AiController {
         }
 
         try {
-            AiGenerateResponse response = aiSuggestionService.generateSuggestions(request.getGoal());
+            AiGenerateResponse response = aiSuggestionService.generate(request.getGoal(), request.getMode());
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));

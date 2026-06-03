@@ -107,6 +107,66 @@ public class OllamaAiService implements AiSuggestionProvider {
         }
     }
 
+    @Override
+    public AiGenerateResponse solveProblem(String topic) {
+        if (!StringUtils.hasText(topic)) {
+            throw new IllegalArgumentException("Topic or question is required");
+        }
+
+        if (!StringUtils.hasText(model)) {
+            throw new IllegalStateException("Ollama model is not configured");
+        }
+
+        String systemPrompt = """
+                You are a learning assistant inside a task manager app.
+                Explain the user's topic, question, or problem clearly.
+                Start with a short direct explanation.
+                Give practical examples that help a learner understand the topic.
+                Finish with 3 actionable next steps the user can add as tasks.
+                Include code examples or commands when useful.
+                Keep the answer concise, beginner-friendly, and actionable.
+                """;
+
+        Map<String, Object> requestBody = Map.of(
+                "model", model,
+                "messages", List.of(
+                        Map.of("role", "system", "content", systemPrompt),
+                        Map.of("role", "user", "content", "Topic or question: \"%s\"".formatted(topic.trim()))
+                ),
+                "options", Map.of("temperature", 0.35),
+                "stream", false
+        );
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        String url = "%s/api/chat".formatted(baseUrl);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.POST,
+                    entity,
+                    String.class
+            );
+
+            String rawText = extractText(response.getBody());
+
+            if (!StringUtils.hasText(rawText)) {
+                throw new IllegalStateException("Ollama returned an empty topic guide");
+            }
+
+            return new AiGenerateResponse(List.of(), rawText, rawText, "ollama", model, "solution");
+        } catch (HttpStatusCodeException ex) {
+            throw new IllegalStateException(buildApiErrorMessage(ex), ex);
+        } catch (ResourceAccessException ex) {
+            throw new IllegalStateException("Unable to reach Ollama at %s. Start Ollama and pull the configured model.".formatted(baseUrl), ex);
+        } catch (RestClientException ex) {
+            throw new IllegalStateException("Ollama request failed. Please try again.", ex);
+        }
+    }
+
     private String extractText(String responseBody) {
         if (!StringUtils.hasText(responseBody)) {
             return "";

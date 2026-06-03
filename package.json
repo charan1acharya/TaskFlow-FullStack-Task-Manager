@@ -5,6 +5,8 @@
     "start": "npm --prefix task-frontend start",
     "frontend": "npm --prefix task-frontend start",
     "backend": "cd taskmanager && mvnw.cmd spring-boot:run",
+    "backend:mysql": "cd taskmanager && mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=mysql",
+    "backend:h2": "cd taskmanager && mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=h2",
     "build": "npm --prefix task-frontend run build",
     "test": "npm --prefix task-frontend test -- --watchAll=false"
   },

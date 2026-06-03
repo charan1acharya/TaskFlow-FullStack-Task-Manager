@@ -7,4 +7,6 @@ public interface AiSuggestionProvider {
     String providerName();
 
     AiGenerateResponse generateSuggestions(String goal);
+
+    AiGenerateResponse solveProblem(String problem);
 }

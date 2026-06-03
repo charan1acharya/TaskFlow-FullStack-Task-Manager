@@ -120,6 +120,76 @@ public class GrokAiService implements AiSuggestionProvider {
         }
     }
 
+    @Override
+    public AiGenerateResponse solveProblem(String topic) {
+        if (!StringUtils.hasText(topic)) {
+            throw new IllegalArgumentException("Topic or question is required");
+        }
+
+        if (!StringUtils.hasText(apiKey)) {
+            throw new IllegalStateException("Grok API key is not configured");
+        }
+
+        String systemPrompt = """
+                You are Grok inside a task manager app.
+                Explain the user's topic, question, or problem clearly.
+                Start with a short direct explanation.
+                Give practical examples that help a learner understand the topic.
+                Finish with 3 actionable next steps the user can add as tasks.
+                Include code examples or commands when useful.
+                Keep the answer concise, beginner-friendly, and actionable.
+                """;
+
+        String userPrompt = "Topic or question: \"%s\"".formatted(topic.trim());
+
+        Map<String, Object> requestBody = Map.of(
+                "model", model,
+                "messages", List.of(
+                        Map.of(
+                                "role", "system",
+                                "content", systemPrompt
+                        ),
+                        Map.of(
+                                "role", "user",
+                                "content", userPrompt
+                        )
+                ),
+                "temperature", 0.35,
+                "max_tokens", 900,
+                "stream", false
+        );
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(apiKey);
+
+        String url = "%s/chat/completions".formatted(baseUrl);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.POST,
+                    entity,
+                    String.class
+            );
+
+            String rawText = extractText(response.getBody());
+
+            if (!StringUtils.hasText(rawText)) {
+                throw new IllegalStateException("Grok returned an empty topic guide");
+            }
+
+            return new AiGenerateResponse(List.of(), rawText, rawText, "grok", model, "solution");
+        } catch (HttpStatusCodeException ex) {
+            throw new IllegalStateException(buildApiErrorMessage(ex), ex);
+        } catch (ResourceAccessException ex) {
+            throw new IllegalStateException("Unable to reach Grok. Check your network connection.", ex);
+        } catch (RestClientException ex) {
+            throw new IllegalStateException("Grok request failed. Please try again.", ex);
+        }
+    }
+
     private Map<String, Object> suggestionResponseFormat() {
         return Map.of(
                 "type", "json_schema",
